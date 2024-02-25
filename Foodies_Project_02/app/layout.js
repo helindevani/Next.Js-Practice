@@ -10,7 +10,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-        
+        // that is layout page
         <MainHeader />
         {children}
       </body>
