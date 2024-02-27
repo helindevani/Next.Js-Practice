@@ -1,53 +1,77 @@
-// import { getSession } from "next-auth/react";
-// import {connectToDatabase } from "../../../lib/db";
-// import {verifyPassword , hashPassword} from '../../../lib/auth';
+import { getSession } from "next-auth/react";
+import { MongoClient } from 'mongodb';
+import { hash, compare } from 'bcryptjs';
 
-// async function handler(req,res){
 
-//     if(req.method !== 'PATCH'){
-//         return;
-//     }
+export async function connectToDatabase() {
+  const client = await MongoClient.connect(
+    'mongodb+srv://helindevani111:7XM6NT0LcVN2Z7Cw@cluster0.20f1b1t.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
+  );
 
-//     const session = getSession({req:req});
+  return client;
+}
 
-//     if(!session){
-//         req.status(401).json({message:'not Authenticated !'})
-//         return ;
-//     }
+export async function hashPassword(password) {
+    const hashedPassword = await hash(password, 12);
+    return hashedPassword;
+  }
+  
+  export async function verifyPassword(password, hashedPassword) {
+    const isValid = await compare(password, hashedPassword);
+    return isValid;
+  }
 
-//     const userEmail =session.user.email;
-//     const oldPassword =req.body.oldPassword;
-//     const newPassword =req.body.newPassword;
+async function handler(req,res){
 
-//     const client = await connectToDatabase();
+    if(req.method !== 'POST'){
+        return;
+    }
 
-//     const usersCollection = client.db().collection('users');
+    
+    try{
+    const session =await getSession({req});
+    console.log(session);
 
-//     const user = await usersCollection.findOne({email : userEmail});
+    if(!session){
+      return res.status(401).json({message:'not Authenticated !'})
+      
+    }
 
-//     if(!user){
-//         res.status(404).json({message : 'User Not Found'});
-//         client.close();
-//         return;
-//     }
+    const userEmail =session.user.email;
+    const oldPassword =req.body.oldPassword;
+    const newPassword =req.body.newPassword;
 
-//     const currentPassword = user.password;
+    const client = await connectToDatabase();
 
-//     const passwordsAreEqual= await verifyPassword(oldPassword, currentPassword);
+    const usersCollection = client.db().collection('users');
 
-//     if(!passwordsAreEqual){
-//         res.status(403).json({message : 'Invalid Password'})
-//         client.close();
-//         return;
-//     }
+    const user = await usersCollection.findOne({email : userEmail});
 
-//     const hashedPassword = await hashPassword(newPassword);
+    if(!user){
+      client.close();
+      return res.status(404).json({ message: 'User Not Found' });
+    }
 
-//     const result = await usersCollection.updateOne({email : userEmail},{$set : {password : newPassword}});
+    const currentPassword = user.password;
 
-//     client.close();
-//     res.status(200).json({message: 'Password Updated'});
+    const passwordsAreEqual= await verifyPassword(oldPassword, currentPassword);
 
-// }
+    if(!passwordsAreEqual){
+      client.close();
+      return res.status(403).json({ message: 'Invalid Password' });
+    }
 
-// export default handler;
+    const hashedPassword = await hashPassword(newPassword);
+
+    const result = await usersCollection.updateOne({email : userEmail},{$set : {password : hashedPassword}});
+
+    client.close();
+    res.status(200).json({message: 'Password Updated'});
+  }
+  catch(error){
+    console.error('Error:', error);
+    return res.status(500).json({ message: 'Internal Server Error' });
+  }
+}
+
+export default handler;
